@@ -1,0 +1,76 @@
+@import url("_editor_button_styles.css");
+
+.card {
+	font-family: arial;
+	font-size: 20px;
+	text-align: center;
+	color: black;
+	text-justify: inter-word;
+	background-color: #ddddd;
+	word-wrap: break-word;
+}
+
+.cloze {
+	background-color: #E3FFFA;
+	color: black;
+	border: 2px solid green;
+	font-weight: bold;
+}
+
+#title {
+	background-color: #45433e;
+	font-size: 14px;
+	font-weight: bold;
+	color: white;
+	font-family: "DejaVu Sans Mono", Consolas,"courier new", Arial;
+	padding: 5px;
+	border-top-left-radius: 5px;	
+	border-top-right-radius: 5px;	
+}
+
+.navbtn {
+	display: inline-block;
+	float: right;
+	background-color: #7b7973;
+	color: #3a3934;
+	margin: 0px 1.5px;
+	height: 15px;
+	width: 15px;
+	border-radius: 50%;
+	font-size: 12px;
+}
+
+#menu {
+	background-color: #3b3a36;
+	font-size: 14px;
+	color: white;
+	font-family: Arial;
+	padding: 5px;
+	text-align: left;
+}
+
+.opcao {
+	margin: 0px 2.5px;
+}
+
+.navbtn:hover, .opcao:hover {
+	cursor: default	;
+}
+
+.close {
+	background-color: #e08150;
+}
+
+#front, #back {
+	background-color: #250b1d;
+	color: white;
+	font-family: "DejaVu Sans Mono", Consolas,"courier new", Arial;
+	text-align: left;
+	line-height: 1.3;
+	padding: 10px;
+	border-right: 4px solid #c06d44;
+}
+
+#tips {
+	margin: 10px 0px;
+}

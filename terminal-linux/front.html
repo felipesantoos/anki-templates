@@ -1,0 +1,66 @@
+<div id="terminal-linux">
+	<div id="title">
+		<span>felipe@linux:~</span>
+		<span class="navbtn close">×</span>
+		<span class="navbtn">□</span>
+		<span class="navbtn">-</span>
+	</div>
+	<div id="menu">
+		<span class="opcao">File</span>
+		<span class="opcao">Edit</span>
+		<span class="opcao">View</span>
+		<span class="opcao">Search</span>
+		<span class="opcao">Terminal</span>
+		<span class="opcao">Help</span>
+	</div>
+	<div id="front">
+		<span id="hostname"></span>{{cloze:Questão}}
+	</div>
+</div>
+<div id="tips">{{Dicas}}</div>
+<div id="outer">
+	<div id="inner">{{type:cloze:Questão}}</div>
+</div>
+
+<script>
+
+	// Estilo do cartão.
+	function _cardStyle(){
+		var t = document.getElementById("typeans");
+		t.style.fontSize = "27.5px";
+		t.style.border = "2px solid black";
+		t.style.padding = "2.5px";
+		t.style.color = "blue";
+		t.style.display = "table";
+		t.style.textAlign = "center";
+		t.style.fontWeight = "bold";
+	}
+
+	function _hostname(){
+		// Cores.
+		var b = '#32c2c9';
+		var w = 'white';
+		// Perfil.
+		var u = bold(font(b, 'felipe'));
+		var p = bold(font(b, 'linux'));
+		var a = bold(font(b, '@'));
+		var dp = bold(font(w, ':'));
+		var d = bold(font(b, '~'));
+		var t = font(w, '$');
+		var hostname = u + a + p + dp + d + t + ' ';
+		document.getElementById('hostname').innerHTML = hostname;
+	}
+
+	function bold(param){
+		return '<strong>' + param + '</strong>';
+	}
+
+	function font(color, text){
+		return '<font color="' + color + '">' + text + '</font>';
+	}
+
+	// Executar funções.
+	_cardStyle();
+	_hostname();
+
+</script>
