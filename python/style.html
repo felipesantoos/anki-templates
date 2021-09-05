@@ -1,0 +1,80 @@
+@import url("_editor_button_styles.css");
+
+.card {
+	font-family: arial;
+	text-align: center;
+	color: black;
+}
+
+.flex-container {
+	display: flex;
+	float: left;
+}
+
+.flex-child {
+	flex: 1;
+}
+
+#lines {
+	color: grey;
+	font-family: Consolas,"courier new";
+	border: .5px solid lightgrey;
+	border-right: 2px solid lime;
+	margin: 15px 5px 0px 0px;
+}
+
+#lines tr:nth-child(odd) td{
+	background-color: #4C8BF5;
+	color: #fff;
+	padding: 0px 5px;
+	line-height: 18.5px;
+	text-align: center;
+}
+
+#lines tr:nth-child(even) td{
+	background-color: #efefef;
+	color: grey;
+	padding: 0px 5px;
+	line-height: 18.5px;
+	text-align: center;
+}
+
+.flex-child:first-child {
+    margin-right: 5px;
+} 
+
+.cloze {
+	background-color: #E3FFFA;
+	border: 2px solid green;
+	font-weight: bold;
+}
+
+#fc, #bc {
+	font-family: Consolas,"courier new";
+	margin-bottom: 10px;
+	text-align: left;
+}
+
+#outer {
+ 	width: 100%;
+ 	justify-content: center;
+	position: absolute;
+	position: fixed;
+	left: 0;
+	bottom: 0;
+}
+
+.corDeFundo {
+	background-color: #efefef;
+}
+
+#extra {
+	width: 90%;
+	display: inline-block;
+	background-color: black;
+	color: white;
+	padding: 5px 0px;
+	padding-left: 7.5px;
+	font-family: Consolas,"courier new";
+	text-align: left;
+}

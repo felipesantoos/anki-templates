@@ -1,0 +1,277 @@
+<!- IDE -->
+<div class="flex-container">
+
+	<!- Barra lateral com os números das linhas -->
+  <div class="flex-child">
+    <table id="lines"></table>
+  </div>
+
+	<!- Código -->
+  <div class="flex-child">
+			<div id="conteudo">
+			<div id="bc"><pre><code id="code">{{cloze:Code}}</code></pre></div>
+			<div id="outer"><div id="inner">{{type:cloze:Code}}</div></div>
+			</div>
+  </div>
+
+</div>
+
+<!- Conteúdo extra dentro de um terminal -->
+<div id="extra">
+	<span id="hostname"></span>	python file.py<br>
+	{{Extra}}
+</div>
+
+<br><br><br><br><br><br>
+
+<!- JavaScript -->
+<script>
+
+	// VARIÁVEIS GLOBAIS.
+	// Elementos.
+	var c = document.getElementById("code");
+	var cc = c.innerHTML;
+	// Cores.
+	var red = "red";
+	var darkred = "darkred";
+	var blue = "blue";
+	var purple = "purple";
+	var grey = "grey";
+
+	// Ir para o cloze.
+	function _cloze() {
+ 		var clozes = document.getElementsByClassName("cloze");
+		var btnCloze = document.getElementsByClassName("btn-cloze");
+		btnCloze = btnCloze[0];
+		window.scrollTo(0, clozes[0].offsetTop - 100);
+	}
+
+	// Nome da linguagem.
+	function _language() {
+		var m = cc.match(/<div><div>/g);
+		if(m == null) {
+			cc = "<div><div>" + cc + "</div></div>";
+			cc = cc.replace(/<br>/g, "</div><div>");	
+			cc = cc.replace(/<div><div>/g, "<div><div># Python</div><div>");
+		} else {
+			cc = cc.replace(/<div><div>/g, "<div><div># Python</div><div>");
+		}
+	}
+
+	// Colorir o código.
+	function _codeColors(){
+
+		// Espaços.
+		cc = cc.replace(/&nbsp;/g, " ");
+
+		// Palavras-chave.
+		cc = cc.replace(/(False)/g, bold(font(purple, "$1")));
+		cc = cc.replace(/(None)/g, bold(font(purple, "$1")));
+		cc = cc.replace(/(True)/g, bold(font(purple, "$1")));
+		cc = cc.replace(/(import)/g, font(blue, "$1"));
+		cc = cc.replace(/ (as) /g, spaceExtremes(font(blue, "$1")));
+		cc = cc.replace(/(elif)/g, font(blue, "$1"));
+		cc = cc.replace(/(if) (.*?(?=:<\/div>))/g, font(blue, "$1") + " $2");
+		cc = cc.replace(/(else):/g, font(blue, "$1"));
+		cc = cc.replace(/(for) (.*?(?=:<\/div>))/g, font(blue, "$1") + " $2");
+		cc = cc.replace(/(while)/g, font(blue, "$1"));
+		cc = cc.replace(/(break)/g, font(blue, "$1"));
+		cc = cc.replace(/(continue)/g, font(blue, "$1"));
+		cc = cc.replace(/ (in) /g, spaceExtremes(font(blue, "$1")));
+		cc = cc.replace(/(return) /g, font(blue, "$1"));
+		cc = cc.replace(/ (and) /g, spaceExtremes(font(blue, "$1")));
+		cc = cc.replace(/ (or) /g, spaceExtremes(font(blue, "$1")));
+		cc = cc.replace(/(global)/g, font(blue, "$1"));
+		cc = cc.replace(/(await)/g, font(blue, "$1"));
+		cc = cc.replace(/(async)/g, font(blue, "$1"));
+		cc = cc.replace(/(pass)/g, font(blue, "$1"));
+		cc = cc.replace(/(finally)/g, font(blue, "$1"));
+		cc = cc.replace(/(try)/g, font(blue, "$1"));
+		cc = cc.replace(/(except)/g, font(blue, "$1"));
+		cc = cc.replace(/(raise)/g, font(blue, "$1"));
+		cc = cc.replace(/ (is) /g, spaceExtremes(font(blue, "$1")));
+		cc = cc.replace(/(not)/g, font(blue, "$1"));
+		cc = cc.replace(/(from) /g, endSpace(font(blue, "$1")));
+		cc = cc.replace(/(nonlocal) /g, endSpace(font(blue, "$1")));
+		cc = cc.replace(/(assert) /g, endSpace(font(blue, "$1")));
+		cc = cc.replace(/(del) /g, endSpace(font(blue, "$1")));
+		cc = cc.replace(/(with) /g, endSpace(font(blue, "$1")));
+		cc = cc.replace(/(yield) /g, endSpace(font(blue, "$1")));
+		cc = cc.replace(/(class) /g, endSpace(font(blue, "$1")));
+		cc = cc.replace(/(lambda) /g, endSpace(font(blue, "$1")));
+		cc = cc.replace(/(def) /g, endSpace(font(blue, "$1")));
+
+		// Strings.
+		cc = cc.replace(/ ('.*')?(?=<\/div>)/g, startSpace(font(darkred, "$1")));
+		cc = cc.replace(/ (".*")?(?=<\/div>)/g, startSpace(font(darkred, "$1")));
+//		cc = cc.replace(/\(('.*')\)?(?=<\/span>|<\/div>)/g, parentesis(font(darkred, "$1")));
+		cc = cc.replace(/\((".*")\)?(?=<\/span>|<\/div>)/g, parentesis(font(darkred, "$1")));
+		cc = cc.replace(/\(('.*') \+/g, "("+ font(darkred, "$1") + " +");
+		cc = cc.replace(/\((".*") \+/g, "("+ font(darkred, "$1") + " +");
+		cc = cc.replace(/\(('.*')\./g, "(" + font(darkred, "$1") + ".");
+		cc = cc.replace(/\((".*")\./g, "(" + font(darkred, "$1") + ".");
+
+		// Variados.
+		cc = cc.replace(/( int)/g, font(blue, "$1"));
+		cc = cc.replace(/( str)/g, font(blue, "$1"));
+		cc = cc.replace(/( float)/g, font(blue, "$1"));
+		cc = cc.replace(/(input)/g, font(purple, "$1"));
+		cc = cc.replace(/(print)/g, font(purple, "$1"));
+		cc = cc.replace(/(format)/g, font(purple, "$1"));
+		cc = cc.replace(/(while)/g, font(blue, "$1"));
+		cc = cc.replace(/([-]{0,1}[\d]*[.]{0,1}[\d]+)/g, font(red, "$1"));
+
+		// Comentários.
+		var mlc = cc.match(/<span class="cloze">"""(.*)"""?(?=<\/span>)/g);
+		multipleLineComments(mlc);
+		cc = cc.replace(/<div>"""(.*)"""?(?=<\/div>)/g, font(darkred, "\"\"\"$1\"\""));
+		var c_1 = cc.match(/#.*?(?=<\/div>)/g);
+		singleLineComments(c_1);
+
+		c.innerHTML = cc;
+
+	}
+
+	// Cor do texto.
+	function font(color, text){
+		var r = '<font color="' + color + '">' + text + '</font>';
+		return r;
+	}
+
+	// Negrito.
+	function bold(param){
+		var r = '<strong>' + param + '</strong>';
+		return r;
+	}
+
+	// Espaços no início e no final.
+	function spaceExtremes(param){
+		var r = ' ' + param + ' ';
+		return r;
+	}
+
+	// Espaço no final.
+	function endSpace(param){
+		var r = param + ' ';
+		return r;
+	}
+
+	// Parenteses.
+	function parentesis(param){
+		var r = '(' + param + ')';
+		return r;
+	}
+
+	// Cometários de uma única linha.
+	function singleLineComments(r){
+		if(r != null){
+	 		var cloze = document.getElementsByClassName("cloze")[0];
+			var text = cloze.textContent;
+			for(var i = 0; i < r.length; i++){
+				var s = r[i].replace(/<\/span>/g, '}');
+				var rsh = s.replace(/<(.|\n)*?>/g, '');
+				rsh = rsh.replace(/}/g, '</span>');
+				cc = cc.replace(r[i], font("grey", rsh));
+			}
+		}
+//		cc = cc.replace(text, "<span class='cloze'>" + text + "</span>");
+	}
+
+	// Cometários de múltiplas linhas.
+	function multipleLineComments(r){
+		if(r != null){
+	 		var cloze = document.getElementsByClassName("cloze")[0];
+			var text = cloze.textContent;
+			for(var i = 0; i < r.length; i++){
+				var si = r[i].replace(/<span class="cloze">/g, '{');
+				var s = si.replace(/<\/span>/g, '}');
+				var nli = s.replace(/<div>/g, '[');
+				var nlf = nli.replace(/<\/div>/g, ']');
+				var rsh = nlf.replace(/<(.|\n)*?>/g, '');
+				rsh = rsh.replace(/{/g, '<span class="cloze">');
+				rsh = rsh.replace(/}/g, '</span>');
+				rsh = rsh.replace(/\]\[/g, '<div></div>');
+				cc = cc.replace(r[i], font("darkred", rsh) + "</font>");
+			}
+		}
+	}
+
+	function _cardStyle(){
+		var b = document.getElementsByTagName("body")[0];
+		b.style.border = "0px solid white";
+		b.style.backgroundColor = "#efefef";
+		b.style.textAlign = "center";
+		b.style.margin = "0px";
+		b.style.padding = "0px";
+		b.style.width = "100%";
+
+		var conteudo = document.getElementById("conteudo");
+		conteudo.style.fontFamily = "Arial";
+		conteudo.style.display = "table";
+		conteudo.style.color = "black";
+		conteudo.style.textJustify = "inter-word";
+		conteudo.style.backgroundColor = "#efefef";
+		conteudo.style.display = "inline-block";
+		conteudo.style.fontSize = "15px";
+		conteudo.style.lineHeight = "15px";
+		conteudo.style.textAlign = "left";
+
+		var t = document.getElementById("typeans");
+		t.style.fontSize = "25px";
+		t.style.fontFamily = "courier new";
+		t.style.padding = "2.5px";
+		t.style.width = "100%";
+		t.style.display = "table";
+		t.style.textAlign = "center";
+		t.style.marginBottom = "7.5px";
+
+	}
+
+	function countLines(){
+		var el = document.getElementById("conteudo");
+		el.style.lineHeight = "20px";
+		var divHeight = el.offsetHeight;
+	  var lineHeight = parseInt(el.style.lineHeight);
+	  var lines = (divHeight / lineHeight) - 1.5;
+		return lines;
+	}
+
+	function _lines(){
+		var t = document.getElementById("lines");	
+		var l = countLines();
+		for(var i = 1; i <= l; i++){
+			var r = t.insertRow(i - 1);
+			var c = r.insertCell(0);
+			c.innerHTML = i;
+		};
+
+		t.style.fontSize = "10px";
+		t.style.lineHeight = "17px";
+		t.style.textAlign = "left";
+	}
+
+	// Nome do computador.
+	function _hostname(){
+		// Cores.
+		var b = '#32c2c9';
+		var w = 'white';
+		// Perfil.
+		var u = font(b, 'felipe');
+		var p = font(b, 'linux');
+		var a = font(b, '@');
+		var d = font(b, '~');
+		var dp = font(w, ':');
+		var t = font(w, '$');
+		var profile = bold(u + a + p + dp + d + t + ' ');
+		document.getElementById('hostname').innerHTML = profile;
+	}
+
+	// Executando as funções.
+	_cloze();
+	_language();
+	_codeColors();
+	_cardStyle();
+	_lines();
+	_hostname();
+
+</script>
