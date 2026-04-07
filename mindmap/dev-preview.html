@@ -164,6 +164,13 @@ hr#answer {
 
   // ===== Phase 3: Layout =====
   var COLOR_SLOTS = 8;
+  var LEVEL_WIDTH = 140;   // px between depth levels
+  var LINE_HEIGHT = 36;    // px between leaf slots
+  var NODE_PAD_X = 20;     // node label horizontal padding (matches CSS later)
+  var NODE_HEIGHT = 24;    // estimated node height for bbox
+  var CHAR_WIDTH = 7;      // estimated px per character for label width
+  var MAX_NODE_WIDTH = 220;
+  var CANVAS_PAD = 16;
 
   // Recursively compute "units" — leaves are 1, parents sum their children.
   function measure(node) {
@@ -199,6 +206,12 @@ hr#answer {
     for (var i = 0; i < node.children.length; i++) {
       propagateBranch(node.children[i], branchIndex);
     }
+  }
+
+  // Pre-order walk over the tree, calling cb on each node.
+  function walkAll(node, cb) {
+    cb(node);
+    for (var i = 0; i < node.children.length; i++) walkAll(node.children[i], cb);
   }
 
   // Top-level orchestration: split branches by alternation, measure each side,
@@ -237,6 +250,38 @@ hr#answer {
     root.uy = totalUnits / 2;
     root.units = totalUnits;
     root.branchIndex = -1; // sentinel: hub has no branch family
+
+    // Walk every node and convert (ux, uy) → (x, y) in pixels.
+    // Also estimate width/height so the bounding box is correct.
+    walkAll(root, function(n) {
+      n.x = n.ux * LEVEL_WIDTH;
+      n.y = n.uy * LINE_HEIGHT;
+      n.width = Math.min(n.label.length * CHAR_WIDTH + NODE_PAD_X, MAX_NODE_WIDTH);
+      n.height = NODE_HEIGHT;
+    });
+
+    // Bounding box across all nodes (accounting for each node's half-width).
+    var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    walkAll(root, function(n) {
+      var halfW = n.width / 2;
+      var halfH = n.height / 2;
+      if (n.x - halfW < minX) minX = n.x - halfW;
+      if (n.x + halfW > maxX) maxX = n.x + halfW;
+      if (n.y - halfH < minY) minY = n.y - halfH;
+      if (n.y + halfH > maxY) maxY = n.y + halfH;
+    });
+
+    // Translate so (CANVAS_PAD, CANVAS_PAD) is the top-left of the bounding box.
+    var dx = CANVAS_PAD - minX;
+    var dy = CANVAS_PAD - minY;
+    walkAll(root, function(n) {
+      n.x += dx;
+      n.y += dy;
+    });
+
+    root.canvasWidth = (maxX - minX) + CANVAS_PAD * 2;
+    root.canvasHeight = (maxY - minY) + CANVAS_PAD * 2;
+
     return root;
   }
 
