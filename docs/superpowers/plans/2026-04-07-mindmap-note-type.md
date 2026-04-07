@@ -557,20 +557,20 @@ Reload via Playwright and check console.
 Expected output (with the dev sample of 3 top-level branches: Light reactions / Calvin cycle / Regulation):
 
 ```
-Photosynthesis ux=0 uy=4 branch=-1
+Photosynthesis ux=0 uy=2 branch=-1
   Light reactions ux=1 uy=1 branch=0
     Photolysis ux=2 uy=0.5 branch=0
     Photophosphorylation ux=2 uy=1.5 branch=0
-  Calvin cycle ux=-1 uy=4 branch=1
-    Carbon fixation ux=-2 uy=2.5 branch=1
-    Reduction ux=-2 uy=3.5 branch=1
-    Regeneration ux=-2 uy=4.5 branch=1
-  Regulation ux=1 uy=6 branch=2
-    Stomatal control ux=2 uy=5.5 branch=2
-    Enzyme activation ux=2 uy=6.5 branch=2
+  Calvin cycle ux=-1 uy=2 branch=1
+    Carbon fixation ux=-2 uy=1 branch=1
+    Reduction ux=-2 uy=2 branch=1
+    Regeneration ux=-2 uy=3 branch=1
+  Regulation ux=1 uy=3 branch=2
+    Stomatal control ux=2 uy=2.5 branch=2
+    Enzyme activation ux=2 uy=3.5 branch=2
 ```
 
-The hub has `uy = 4` (midpoint of 0..8). Light reactions and Regulation are on the right (positive ux); Calvin cycle is on the left (negative ux). The single left branch (Calvin cycle) is centered against the hub vertically thanks to the asymmetric offset.
+**Why these numbers:** With this 3-branch sample, alternation puts `Light reactions` (2 leaves) and `Regulation` (2 leaves) on the right and `Calvin cycle` (3 leaves) on the left. So `rightUnits = 4`, `leftUnits = 3`, `totalUnits = max(4, 3, 1) = 4`, and the hub goes to `uy = totalUnits / 2 = 2`. Right branches fill `[0..4]` units of vertical space starting at `rightOffset = 0`; the left branch fills `[0.5..3.5]` starting at `leftOffset = (4 - 3) / 2 = 0.5`. Calvin cycle's `uy = 0.5 + 3/2 = 2`, vertically aligned with the hub thanks to the asymmetric offset. Light reactions and Regulation sit symmetrically around the hub at `uy = 1` and `uy = 3`.
 
 - [ ] **Step 3: Remove the verification log**
 
