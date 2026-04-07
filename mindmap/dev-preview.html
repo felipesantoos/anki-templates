@@ -105,6 +105,37 @@ hr#answer {
       .replace(/&amp;/g, "&");
   }
 
+  // ===== Phase 1b: Inline formatter =====
+  // Lifted verbatim from summary-note-type.md. Handles bold/italic/code/links/
+  // strikethrough/escapes inside a single line of text. Code spans are parked
+  // behind \u0000 sentinels so the link/emphasis rules can't reach inside them.
+  // The _italic_ rule is intentionally omitted — it collided with snake_case.
+  function inline(t) {
+    // 1. Escape HTML special chars first.
+    t = t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+    // 2. Park code spans behind placeholders.
+    var codes = [];
+    t = t.replace(/`([^`]+)`/g, function(_, c) {
+      codes.push("<code>" + c + "</code>");
+      return "\u0000C" + (codes.length - 1) + "\u0000";
+    });
+
+    // 3. Inline substitutions. Image MUST run before link.
+    t = t
+      .replace(/!\[([^\]]*)\]\(((?:[^()]|\([^)]*\))+)\)/g, '<img src="$2" alt="$1">')
+      .replace(/\[([^\]]+)\]\(((?:[^()]|\([^)]*\))+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+      .replace(/\*\*\*(?=\S)(.+?)(?<=\S)\*\*\*/g, "<strong><em>$1</em></strong>")
+      .replace(/\*\*(?=\S)(.+?)(?<=\S)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*(?=\S)(.+?)(?<=\S)\*/g, "<em>$1</em>")
+      .replace(/~~(?=\S)(.+?)(?<=\S)~~/g, "<del>$1</del>");
+
+    // 4. Restore code spans.
+    return t.replace(/\u0000C(\d+)\u0000/g, function(_, idx) {
+      return codes[parseInt(idx, 10)];
+    });
+  }
+
   // ===== Phase 2: Parse =====
   // Indented bullets → tree of { label, children, depth }.
   // - Skips lines that aren't bullets (regex match fails).
