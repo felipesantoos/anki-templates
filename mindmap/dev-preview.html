@@ -285,13 +285,44 @@ hr#answer {
     return root;
   }
 
+  // ===== Phase 4: Render =====
+  // Helper: empty a container by removing every child.
+  function clearContainer(el) {
+    while (el.firstChild) el.removeChild(el.firstChild);
+  }
+
+  function renderMindmap(root, container) {
+    // Outer canvas: position:relative so absolute children anchor to it.
+    var canvas = document.createElement("div");
+    canvas.className = "mindmap-canvas";
+    canvas.style.width = root.canvasWidth + "px";
+    canvas.style.height = root.canvasHeight + "px";
+
+    // Walk and emit one div per node.
+    walkAll(root, function(n) {
+      var div = document.createElement("div");
+      div.className = "mindmap-node" + (n === root ? " mindmap-hub" : "");
+      if (n !== root) div.setAttribute("data-branch", String(n.branchIndex % COLOR_SLOTS));
+      div.setAttribute("data-depth", String(n.depth));
+      div.style.left = n.x + "px";
+      div.style.top = n.y + "px";
+      // Inject formatted label HTML. inline() output is the only HTML source
+      // here; same trust model as summary-note-type.md (user owns their notes).
+      div.insertAdjacentHTML("afterbegin", inline(n.label));
+      canvas.appendChild(div);
+    });
+
+    clearContainer(container);
+    container.appendChild(canvas);
+  }
+
   // ===== Main =====
   var el = document.getElementById("mindmap-root");
   var rawText = cleanupAnkiHtml(el.innerHTML);
   var title = el.getAttribute("data-title") || "(untitled)";
   var tree = parseTree(rawText, title);
   layoutTree(tree);
-  // Render call comes in Phase 3.
+  renderMindmap(tree, el);
 })();
 </script>
 
