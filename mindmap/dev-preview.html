@@ -105,10 +105,38 @@ hr#answer {
       .replace(/&amp;/g, "&");
   }
 
+  // ===== Phase 2: Parse =====
+  // Indented bullets → tree of { label, children, depth }.
+  // - Skips lines that aren't bullets (regex match fails).
+  // - Skips empty bullets (label after the marker is whitespace-only).
+  // - Tab indents are normalized to 4 spaces before depth comparison.
+  // - Each new node attaches to the deepest open ancestor whose indent is < its own.
+  function parseTree(text, rootLabel) {
+    var root = { label: rootLabel, children: [], depth: 0 };
+    var stack = [{ indent: -1, node: root }];
+    var lines = text.split("\n");
+    for (var i = 0; i < lines.length; i++) {
+      var m = lines[i].match(/^(\s*)[-*]\s+(.*)$/);
+      if (!m) continue;
+      var label = m[2].trim();
+      if (!label) continue;
+      var indent = m[1].replace(/\t/g, "    ").length;
+      var node = { label: label, children: [], depth: 0 };
+      while (stack[stack.length - 1].indent >= indent) stack.pop();
+      var parent = stack[stack.length - 1].node;
+      node.depth = parent.depth + 1;
+      parent.children.push(node);
+      stack.push({ indent: indent, node: node });
+    }
+    return root;
+  }
+
   // ===== Main =====
   var el = document.getElementById("mindmap-root");
   var rawText = cleanupAnkiHtml(el.innerHTML);
-  console.log("CLEANED:", JSON.stringify(rawText));
+  var title = el.getAttribute("data-title") || "(untitled)";
+  var tree = parseTree(rawText, title);
+  console.log("TREE:", JSON.stringify(tree, null, 2));
 })();
 </script>
 
