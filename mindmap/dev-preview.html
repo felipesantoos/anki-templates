@@ -370,12 +370,57 @@ hr#answer {
     while (el.firstChild) el.removeChild(el.firstChild);
   }
 
+  var SVG_NS = "http://www.w3.org/2000/svg";
+
   function renderMindmap(root, container) {
-    // Outer canvas: position:relative so absolute children anchor to it.
     var canvas = document.createElement("div");
     canvas.className = "mindmap-canvas";
     canvas.style.width = root.canvasWidth + "px";
     canvas.style.height = root.canvasHeight + "px";
+
+    // SVG layer for connectors. pointer-events: none so it never intercepts taps.
+    var svg = document.createElementNS(SVG_NS, "svg");
+    svg.setAttribute("class", "mindmap-edges");
+    svg.setAttribute("width", root.canvasWidth);
+    svg.setAttribute("height", root.canvasHeight);
+    svg.style.position = "absolute";
+    svg.style.left = "0";
+    svg.style.top = "0";
+    svg.style.pointerEvents = "none";
+    canvas.appendChild(svg);
+
+    // Walk parent → child pairs and emit one Bezier path per edge.
+    function emitConnector(parent, child) {
+      var startX, endX;
+      if (child.x > parent.x) {
+        // Right side: line leaves parent's right edge, enters child's left edge.
+        startX = parent.x + parent.width / 2;
+        endX = child.x - child.width / 2;
+      } else {
+        // Left side (mirror).
+        startX = parent.x - parent.width / 2;
+        endX = child.x + child.width / 2;
+      }
+      // Quadratic Bezier: control point at (endX, parent.y) — gives the mindmap "swoop".
+      var d = "M " + startX + " " + parent.y +
+              " Q " + endX + " " + parent.y +
+              " " + endX + " " + child.y;
+      var path = document.createElementNS(SVG_NS, "path");
+      path.setAttribute("d", d);
+      path.setAttribute("stroke", "var(--branch-" + (child.branchIndex % COLOR_SLOTS) + ")");
+      path.setAttribute("stroke-width", "2");
+      path.setAttribute("stroke-linecap", "round");
+      path.setAttribute("fill", "none");
+      svg.appendChild(path);
+    }
+
+    function walkConnectors(node) {
+      for (var i = 0; i < node.children.length; i++) {
+        emitConnector(node, node.children[i]);
+        walkConnectors(node.children[i]);
+      }
+    }
+    walkConnectors(root);
 
     // Walk and emit one div per node.
     walkAll(root, function(n) {
@@ -385,8 +430,6 @@ hr#answer {
       div.setAttribute("data-depth", String(n.depth));
       div.style.left = n.x + "px";
       div.style.top = n.y + "px";
-      // Inject formatted label HTML. inline() output is the only HTML source
-      // here; same trust model as summary-note-type.md (user owns their notes).
       div.insertAdjacentHTML("afterbegin", inline(n.label));
       canvas.appendChild(div);
     });
