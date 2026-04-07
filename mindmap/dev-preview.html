@@ -85,10 +85,30 @@ hr#answer {
 
 <script>
 (function() {
-  // Implementation will be built up across the plan tasks.
-  // For Task 1 we just verify the page loads.
-  console.log("dev-preview.html loaded; mindmap-root present:",
-              !!document.getElementById("mindmap-root"));
+  // ===== Phase 1: Cleanup =====
+  // Lifted verbatim from summary-note-type.md. Anki wraps lines in <div>
+  // (desktop/AnkiDroid) or <br> (older clients) and entity-encodes special
+  // chars. We undo all of that to recover the plain markdown source.
+  function cleanupAnkiHtml(rawHtml) {
+    return rawHtml
+      // Normalize line breaks — AnkiDroid wraps each line in <div>, desktop uses <br>.
+      .replace(/<\/div>\s*<div[^>]*>/gi, "\n")
+      .replace(/<div[^>]*>/gi, "\n")
+      .replace(/<\/div>/gi, "")
+      .replace(/<br\s*\/?>/gi, "\n")
+      // Strip any remaining tags.
+      .replace(/<[^>]+>/g, "")
+      // Decode entities. &amp; MUST be last so &amp;lt; doesn't double-decode into <.
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&nbsp;/g, " ")
+      .replace(/&amp;/g, "&");
+  }
+
+  // ===== Main =====
+  var el = document.getElementById("mindmap-root");
+  var rawText = cleanupAnkiHtml(el.innerHTML);
+  console.log("CLEANED:", JSON.stringify(rawText));
 })();
 </script>
 
