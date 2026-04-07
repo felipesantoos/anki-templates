@@ -162,12 +162,91 @@ hr#answer {
     return root;
   }
 
+  // ===== Phase 3: Layout =====
+  var COLOR_SLOTS = 8;
+
+  // Recursively compute "units" — leaves are 1, parents sum their children.
+  function measure(node) {
+    if (node.children.length === 0) {
+      node.units = 1;
+      return 1;
+    }
+    var sum = 0;
+    for (var i = 0; i < node.children.length; i++) {
+      sum += measure(node.children[i]);
+    }
+    node.units = sum;
+    return sum;
+  }
+
+  // Recursively assign uy (vertical center in units) and ux (depth, signed by side).
+  // - topUnits is the unit-space top edge of this node's slot.
+  // - uy is the midpoint of the slot.
+  // - Children fill the slot from top to bottom in declaration order.
+  function place(node, topUnits, side) {
+    node.uy = topUnits + node.units / 2;
+    node.ux = node.depth * (side === "left" ? -1 : 1);
+    var cursor = topUnits;
+    for (var i = 0; i < node.children.length; i++) {
+      place(node.children[i], cursor, side);
+      cursor += node.children[i].units;
+    }
+  }
+
+  // Propagate the top-level branch index to every descendant so they share a color.
+  function propagateBranch(node, branchIndex) {
+    node.branchIndex = branchIndex;
+    for (var i = 0; i < node.children.length; i++) {
+      propagateBranch(node.children[i], branchIndex);
+    }
+  }
+
+  // Top-level orchestration: split branches by alternation, measure each side,
+  // offset each side so its midpoint aligns with the hub, then place.
+  function layoutTree(root) {
+    var leftBranches = [];
+    var rightBranches = [];
+    for (var i = 0; i < root.children.length; i++) {
+      propagateBranch(root.children[i], i % COLOR_SLOTS);
+      if (i % 2 === 0) rightBranches.push(root.children[i]);
+      else leftBranches.push(root.children[i]);
+    }
+
+    var leftUnits = 0;
+    for (var i = 0; i < leftBranches.length; i++) leftUnits += measure(leftBranches[i]);
+    var rightUnits = 0;
+    for (var i = 0; i < rightBranches.length; i++) rightUnits += measure(rightBranches[i]);
+    var totalUnits = Math.max(leftUnits, rightUnits, 1);
+
+    var leftOffset = (totalUnits - leftUnits) / 2;
+    var rightOffset = (totalUnits - rightUnits) / 2;
+
+    var cursor = leftOffset;
+    for (var i = 0; i < leftBranches.length; i++) {
+      place(leftBranches[i], cursor, "left");
+      cursor += leftBranches[i].units;
+    }
+    cursor = rightOffset;
+    for (var i = 0; i < rightBranches.length; i++) {
+      place(rightBranches[i], cursor, "right");
+      cursor += rightBranches[i].units;
+    }
+
+    // Hub
+    root.ux = 0;
+    root.uy = totalUnits / 2;
+    root.units = totalUnits;
+    root.branchIndex = -1; // sentinel: hub has no branch family
+    return root;
+  }
+
   // ===== Main =====
   var el = document.getElementById("mindmap-root");
   var rawText = cleanupAnkiHtml(el.innerHTML);
   var title = el.getAttribute("data-title") || "(untitled)";
   var tree = parseTree(rawText, title);
-  console.log("TREE:", JSON.stringify(tree, null, 2));
+  layoutTree(tree);
+  // Render call comes in Phase 3.
 })();
 </script>
 
