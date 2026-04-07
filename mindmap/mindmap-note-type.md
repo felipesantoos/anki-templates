@@ -127,43 +127,19 @@ Sibling of the **Summary** note type — same field shape, same typography, same
     return root;
   }
 
-  // ===== Phase 3: Layout =====
+  // ===== Phase 3: Layout (two-pass measurement) =====
+  // The layout runs in two passes around a real DOM render. Pass 1 only knows
+  // each node's depth and which side it's on (alternation). After the nodes
+  // are inserted into the DOM with `visibility: hidden`, we read their actual
+  // offsetWidth and offsetHeight via Pass 2 — that gives true sizes for any
+  // wrapped multi-line label, which a constants-based estimate cannot do.
+  // Pass 3 then computes vertical positions from those measured heights and
+  // a final bounding box from the measured widths, before revealing the canvas.
   var COLOR_SLOTS = 8;
-  var LEVEL_WIDTH = 140;   // px between depth levels
-  var LINE_HEIGHT = 36;    // px between leaf slots
-  var NODE_PAD_X = 20;     // node label horizontal padding (matches CSS later)
-  var NODE_HEIGHT = 24;    // estimated node height for bbox
-  var CHAR_WIDTH = 7;      // estimated px per character for label width
-  var MAX_NODE_WIDTH = 220;
-  var CANVAS_PAD = 16;
-
-  // Recursively compute "units" — leaves are 1, parents sum their children.
-  function measure(node) {
-    if (node.children.length === 0) {
-      node.units = 1;
-      return 1;
-    }
-    var sum = 0;
-    for (var i = 0; i < node.children.length; i++) {
-      sum += measure(node.children[i]);
-    }
-    node.units = sum;
-    return sum;
-  }
-
-  // Recursively assign uy (vertical center in units) and ux (depth, signed by side).
-  // - topUnits is the unit-space top edge of this node's slot.
-  // - uy is the midpoint of the slot.
-  // - Children fill the slot from top to bottom in declaration order.
-  function place(node, topUnits, side) {
-    node.uy = topUnits + node.units / 2;
-    node.ux = node.depth * (side === "left" ? -1 : 1);
-    var cursor = topUnits;
-    for (var i = 0; i < node.children.length; i++) {
-      place(node.children[i], cursor, side);
-      cursor += node.children[i].units;
-    }
-  }
+  var LEVEL_WIDTH = 240;       // px between depth levels (must exceed CSS max-width)
+  var LEAF_GAP_PX = 12;        // vertical gap between adjacent leaf slots
+  var MIN_LEAF_SLOT_PX = 36;   // floor for a leaf's vertical slot height
+  var CANVAS_PAD = 16;         // padding around the bounding box
 
   // Propagate the top-level branch index to every descendant so they share a color.
   function propagateBranch(node, branchIndex) {
@@ -179,9 +155,10 @@ Sibling of the **Summary** note type — same field shape, same typography, same
     for (var i = 0; i < node.children.length; i++) walkAll(node.children[i], cb);
   }
 
-  // Top-level orchestration: split branches by alternation, measure each side,
-  // offset each side so its midpoint aligns with the hub, then place.
-  function layoutTree(root) {
+  // Pass 1 — assign branch families and horizontal positions (no DOM access).
+  // Top-level branches alternate left/right; descendants inherit their top-level
+  // ancestor's branchIndex and side. Returns { left, right } for use in Pass 3.
+  function assignBranchesAndX(root) {
     var leftBranches = [];
     var rightBranches = [];
     for (var i = 0; i < root.children.length; i++) {
@@ -189,43 +166,79 @@ Sibling of the **Summary** note type — same field shape, same typography, same
       if (i % 2 === 0) rightBranches.push(root.children[i]);
       else leftBranches.push(root.children[i]);
     }
+    root.branchIndex = -1; // hub has no branch family
 
-    var leftUnits = 0;
-    for (var i = 0; i < leftBranches.length; i++) leftUnits += measure(leftBranches[i]);
-    var rightUnits = 0;
-    for (var i = 0; i < rightBranches.length; i++) rightUnits += measure(rightBranches[i]);
-    var totalUnits = Math.max(leftUnits, rightUnits, 1);
+    function assignX(node, side) {
+      node.x = node.depth * LEVEL_WIDTH * (side === "left" ? -1 : 1);
+      for (var i = 0; i < node.children.length; i++) {
+        assignX(node.children[i], side);
+      }
+    }
+    for (var i = 0; i < leftBranches.length; i++) assignX(leftBranches[i], "left");
+    for (var i = 0; i < rightBranches.length; i++) assignX(rightBranches[i], "right");
+    root.x = 0;
 
-    var leftOffset = (totalUnits - leftUnits) / 2;
-    var rightOffset = (totalUnits - rightUnits) / 2;
+    return { left: leftBranches, right: rightBranches };
+  }
+
+  // Pass 3 — vertical layout using measured heights.
+  // Each leaf gets a slot of (measured height + gap), with a minimum floor.
+  // Each parent's slot height is the sum of its children's slot heights, so a
+  // sub-tree with many leaves naturally claims more vertical space than a leaf.
+  // Each side is then offset so its midpoint aligns with the hub (asymmetric
+  // centering — a single-branch left side stays on the hub's horizontal axis).
+  function assignY(root, sides) {
+    function computeSlot(node) {
+      if (node.children.length === 0) {
+        var h = node.height + LEAF_GAP_PX;
+        if (h < MIN_LEAF_SLOT_PX) h = MIN_LEAF_SLOT_PX;
+        node.slotHeight = h;
+        return h;
+      }
+      var sum = 0;
+      for (var i = 0; i < node.children.length; i++) {
+        sum += computeSlot(node.children[i]);
+      }
+      node.slotHeight = sum;
+      return sum;
+    }
+
+    function placeY(node, topY) {
+      node.y = topY + node.slotHeight / 2;
+      var cursor = topY;
+      for (var i = 0; i < node.children.length; i++) {
+        placeY(node.children[i], cursor);
+        cursor += node.children[i].slotHeight;
+      }
+    }
+
+    var leftHeight = 0;
+    for (var i = 0; i < sides.left.length; i++) leftHeight += computeSlot(sides.left[i]);
+    var rightHeight = 0;
+    for (var i = 0; i < sides.right.length; i++) rightHeight += computeSlot(sides.right[i]);
+    var totalHeight = Math.max(leftHeight, rightHeight, MIN_LEAF_SLOT_PX);
+
+    var leftOffset = (totalHeight - leftHeight) / 2;
+    var rightOffset = (totalHeight - rightHeight) / 2;
 
     var cursor = leftOffset;
-    for (var i = 0; i < leftBranches.length; i++) {
-      place(leftBranches[i], cursor, "left");
-      cursor += leftBranches[i].units;
+    for (var i = 0; i < sides.left.length; i++) {
+      placeY(sides.left[i], cursor);
+      cursor += sides.left[i].slotHeight;
     }
     cursor = rightOffset;
-    for (var i = 0; i < rightBranches.length; i++) {
-      place(rightBranches[i], cursor, "right");
-      cursor += rightBranches[i].units;
+    for (var i = 0; i < sides.right.length; i++) {
+      placeY(sides.right[i], cursor);
+      cursor += sides.right[i].slotHeight;
     }
 
-    // Hub
-    root.ux = 0;
-    root.uy = totalUnits / 2;
-    root.units = totalUnits;
-    root.branchIndex = -1; // sentinel: hub has no branch family
+    // Hub at the vertical midpoint of the canvas.
+    root.y = totalHeight / 2;
+  }
 
-    // Walk every node and convert (ux, uy) → (x, y) in pixels.
-    // Also estimate width/height so the bounding box is correct.
-    walkAll(root, function(n) {
-      n.x = n.ux * LEVEL_WIDTH;
-      n.y = n.uy * LINE_HEIGHT;
-      n.width = Math.min(n.label.length * CHAR_WIDTH + NODE_PAD_X, MAX_NODE_WIDTH);
-      n.height = NODE_HEIGHT;
-    });
-
-    // Bounding box across all nodes (accounting for each node's half-width).
+  // Compute bounding box from measured widths/heights at final positions, then
+  // translate everything so the bounding box top-left is at (CANVAS_PAD, CANVAS_PAD).
+  function computeBoundsAndTranslate(root) {
     var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     walkAll(root, function(n) {
       var halfW = n.width / 2;
@@ -235,19 +248,21 @@ Sibling of the **Summary** note type — same field shape, same typography, same
       if (n.y - halfH < minY) minY = n.y - halfH;
       if (n.y + halfH > maxY) maxY = n.y + halfH;
     });
-
-    // Translate so (CANVAS_PAD, CANVAS_PAD) is the top-left of the bounding box.
     var dx = CANVAS_PAD - minX;
     var dy = CANVAS_PAD - minY;
     walkAll(root, function(n) {
       n.x += dx;
       n.y += dy;
     });
-
     root.canvasWidth = (maxX - minX) + CANVAS_PAD * 2;
     root.canvasHeight = (maxY - minY) + CANVAS_PAD * 2;
-
-    return root;
+    // Hub-only / single-leaf trees: ensure the canvas isn't smaller than the hub.
+    if (root.canvasWidth < root.width + CANVAS_PAD * 2) {
+      root.canvasWidth = root.width + CANVAS_PAD * 2;
+    }
+    if (root.canvasHeight < root.height + CANVAS_PAD * 2) {
+      root.canvasHeight = root.height + CANVAS_PAD * 2;
+    }
   }
 
   // ===== Phase 4: Render =====
@@ -259,12 +274,54 @@ Sibling of the **Summary** note type — same field shape, same typography, same
   var SVG_NS = "http://www.w3.org/2000/svg";
 
   function renderMindmap(root, container) {
+    // Pass 1: branch families and horizontal positions (no DOM yet).
+    var sides = assignBranchesAndX(root);
+
+    // Set every node's y to 0 for the initial hidden render — we don't know
+    // real heights yet, and the actual y comes after measurement.
+    walkAll(root, function(n) { n.y = 0; });
+
+    // Build the canvas hidden so the initial position flash isn't visible.
+    clearContainer(container);
     var canvas = document.createElement("div");
     canvas.className = "mindmap-canvas";
-    canvas.style.width = root.canvasWidth + "px";
-    canvas.style.height = root.canvasHeight + "px";
+    canvas.style.position = "relative";
+    canvas.style.visibility = "hidden";
+    container.appendChild(canvas);
 
-    // SVG layer for connectors. pointer-events: none so it never intercepts taps.
+    // Render every node into the canvas at its initial (x, 0). The DOM has
+    // to exist for the browser to lay out the wrapped text and let us read
+    // offsetWidth / offsetHeight.
+    walkAll(root, function(n) {
+      var div = document.createElement("div");
+      div.className = "mindmap-node" + (n === root ? " mindmap-hub" : "");
+      if (n !== root) div.setAttribute("data-branch", String(n.branchIndex % COLOR_SLOTS));
+      div.setAttribute("data-depth", String(n.depth));
+      div.style.left = n.x + "px";
+      div.style.top = n.y + "px";
+      div.insertAdjacentHTML("afterbegin", inline(n.label));
+      canvas.appendChild(div);
+      n._div = div;
+    });
+
+    // Pass 2: read each node's actual rendered size from the DOM.
+    walkAll(root, function(n) {
+      n.width = n._div.offsetWidth;
+      n.height = n._div.offsetHeight;
+    });
+
+    // Pass 3: assign vertical positions using the measured heights, then
+    // recompute the bounding box and translate so origin is at (0,0).
+    assignY(root, sides);
+    computeBoundsAndTranslate(root);
+
+    // Apply the final positions back to each div.
+    walkAll(root, function(n) {
+      n._div.style.left = n.x + "px";
+      n._div.style.top = n.y + "px";
+    });
+
+    // Build the SVG connector layer with the final positions and widths.
     var svg = document.createElementNS(SVG_NS, "svg");
     svg.setAttribute("class", "mindmap-edges");
     svg.setAttribute("width", root.canvasWidth);
@@ -273,13 +330,11 @@ Sibling of the **Summary** note type — same field shape, same typography, same
     svg.style.left = "0";
     svg.style.top = "0";
     svg.style.pointerEvents = "none";
-    canvas.appendChild(svg);
 
-    // Walk parent → child pairs and emit one Bezier path per edge.
     function emitConnector(parent, child) {
       var startX, endX;
       if (child.x > parent.x) {
-        // Right side: line leaves parent's right edge, enters child's left edge.
+        // Right side: leaves parent's right edge, enters child's left edge.
         startX = parent.x + parent.width / 2;
         endX = child.x - child.width / 2;
       } else {
@@ -287,7 +342,8 @@ Sibling of the **Summary** note type — same field shape, same typography, same
         startX = parent.x - parent.width / 2;
         endX = child.x + child.width / 2;
       }
-      // Quadratic Bezier: control point at (endX, parent.y) — gives the mindmap "swoop".
+      // Quadratic Bezier with control point at (endX, parent.y) — the line
+      // leaves the parent horizontally and curves into the child horizontally.
       var d = "M " + startX + " " + parent.y +
               " Q " + endX + " " + parent.y +
               " " + endX + " " + child.y;
@@ -308,20 +364,13 @@ Sibling of the **Summary** note type — same field shape, same typography, same
     }
     walkConnectors(root);
 
-    // Walk and emit one div per node.
-    walkAll(root, function(n) {
-      var div = document.createElement("div");
-      div.className = "mindmap-node" + (n === root ? " mindmap-hub" : "");
-      if (n !== root) div.setAttribute("data-branch", String(n.branchIndex % COLOR_SLOTS));
-      div.setAttribute("data-depth", String(n.depth));
-      div.style.left = n.x + "px";
-      div.style.top = n.y + "px";
-      div.insertAdjacentHTML("afterbegin", inline(n.label));
-      canvas.appendChild(div);
-    });
+    // Insert SVG before the node divs so connectors render behind nodes.
+    canvas.insertBefore(svg, canvas.firstChild);
 
-    clearContainer(container);
-    container.appendChild(canvas);
+    // Finalize canvas size and reveal.
+    canvas.style.width = root.canvasWidth + "px";
+    canvas.style.height = root.canvasHeight + "px";
+    canvas.style.visibility = "visible";
   }
 
   // ===== Main =====
@@ -329,7 +378,6 @@ Sibling of the **Summary** note type — same field shape, same typography, same
   var rawText = cleanupAnkiHtml(el.innerHTML);
   var title = el.getAttribute("data-title") || "(untitled)";
   var tree = parseTree(rawText, title);
-  layoutTree(tree);
   renderMindmap(tree, el);
 
   // Center the hub horizontally in the scroll viewport on first paint.
@@ -463,8 +511,12 @@ hr#answer {
   padding: 4px 10px;
   border-radius: 14px;
   border-bottom: 2px solid currentColor;
-  white-space: nowrap;
-  line-height: 1.2;
+  max-width: 200px;
+  white-space: normal;
+  word-wrap: break-word;
+  text-align: center;
+  line-height: 1.25;
+  box-sizing: border-box;
 }
 
 .mindmap-hub {
