@@ -1,0 +1,270 @@
+{{FrontSide}}
+
+<hr id="answer">
+
+<div class="back-header">
+  <div class="back-title">{{Title}}</div>
+  {{#Keywords}}<div class="keywords">{{Keywords}}</div>{{/Keywords}}
+</div>
+
+<div class="summary" id="summary-content">{{Summary}}</div>
+
+<script>
+(function() {
+  function escapeHtml(s) {
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  // Split a markdown table row on unescaped `|`. Literal pipes can be written
+  // as `\|` in the source and will survive the split. Leading and trailing
+  // empty cells (from `| a | b |`) are discarded.
+  function splitRow(line) {
+    var SENT = "\u0000P\u0000";
+    return line.replace(/\\\|/g, SENT).split("|")
+      .filter(function(c, idx, a) { return idx > 0 && idx < a.length - 1; })
+      .map(function(c) { return c.split(SENT).join("|").trim(); });
+  }
+
+  // Any line whose start matches this begins a new block — used by the
+  // paragraph-fold loop to know when to stop folding. Must stay in sync
+  // with the block-type dispatch in parseMarkdown(). Tables (`|` prefix)
+  // are checked separately in the paragraph fold because they depend on
+  // the next line being a valid separator row.
+  var BLOCK_START = /^(#{1,6}\s|>\s|\s*[-*]\s|\s*\d+\.\s|```|---+\s*$)/;
+
+  function inline(t) {
+    // 1. Escape HTML special chars first, so literal < > & in prose render safely
+    t = t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+    // 2. Park code spans behind placeholders so link/emphasis rules can't reach inside them
+    var codes = [];
+    t = t.replace(/`([^`]+)`/g, function(_, c) {
+      codes.push("<code>" + c + "</code>");
+      return "\u0000C" + (codes.length - 1) + "\u0000";
+    });
+
+    // 3. Inline substitutions. Images MUST run before links so `![alt](url)` isn't eaten.
+    //    Link/image URLs allow one level of balanced parens: `(?:[^()]|\([^)]*\))+`
+    //    — this makes URLs like https://en.wikipedia.org/wiki/Foo_(bar) work.
+    //    Emphasis/strikethrough require non-whitespace adjacent to the delimiter so
+    //    `a * b * c` and `approx ~ 5 ~ 7` stay literal.
+    t = t
+      .replace(/!\[([^\]]*)\]\(((?:[^()]|\([^)]*\))+)\)/g, '<img src="$2" alt="$1">')
+      .replace(/\[([^\]]+)\]\(((?:[^()]|\([^)]*\))+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+      .replace(/\*\*\*(?=\S)(.+?)(?<=\S)\*\*\*/g, "<strong><em>$1</em></strong>")
+      .replace(/\*\*(?=\S)(.+?)(?<=\S)\*\*/g, "<strong>$1</strong>")
+      // Italic adds `(?<!\*)` / `(?!\*)` on both sides so it can't eat one `*`
+      // out of a `**` pair. Without this, `a ** b ** c` would render as
+      // `a <em>* b *</em> c` because italic would grab the inner `*` chars.
+      .replace(/(?<!\*)\*(?![*\s])(.+?)(?<![*\s])\*(?!\*)/g, "<em>$1</em>")
+      // `_italic_` rule intentionally omitted — it collided with snake_case identifiers
+      .replace(/~~(?=\S)(.+?)(?<=\S)~~/g, "<del>$1</del>");
+
+    // 4. Restore code spans
+    return t.replace(/\u0000C(\d+)\u0000/g, function(_, idx) {
+      return codes[parseInt(idx, 10)];
+    });
+  }
+
+  // Opening tag for a list at the given type and marker. Ordered lists with a
+  // non-1 starting number emit `<ol start="N">` so custom numbering survives.
+  function openListTag(type, marker) {
+    if (type === "ul") return "<ul>";
+    var startNum = parseInt(marker, 10);
+    return startNum !== 1 ? '<ol start="' + startNum + '">' : "<ol>";
+  }
+
+  // Stack-based nested list builder. Handles mixed types and arbitrary depth.
+  // Indent is measured in spaces (tabs normalized to 4). Be consistent with the
+  // indent unit *within* a single list — depth comparison is by space count.
+  function buildNestedList(items) {
+    var html = "";
+    var stack = []; // each entry: { indent, type }
+
+    for (var i = 0; i < items.length; i++) {
+      var match = items[i].match(/^(\s*)([-*]|\d+\.)\s+(.*)$/);
+      if (!match) continue;
+      var indent = match[1].replace(/\t/g, "    ").length;
+      var marker = match[2];
+      var type = (marker === "-" || marker === "*") ? "ul" : "ol";
+      var content = match[3];
+
+      // Task list detection: `- [ ] todo` or `- [x] done`
+      var taskMatch = content.match(/^\[([ xX])\]\s+(.*)$/);
+      var liOpen = "<li>";
+      if (taskMatch) {
+        var checked = taskMatch[1] !== " ";
+        liOpen = '<li class="task"><input type="checkbox" disabled' + (checked ? " checked" : "") + "> ";
+        content = taskMatch[2];
+      }
+
+      // 1. Pop any lists deeper than the current indent.
+      while (stack.length > 0 && stack[stack.length - 1].indent > indent) {
+        html += "</li></" + stack.pop().type + ">";
+      }
+
+      // 2. Decide what to do at the current indent.
+      if (stack.length === 0 || stack[stack.length - 1].indent < indent) {
+        // Open a new (possibly nested) list. Nested lists live INSIDE the
+        // currently-open <li>, which is intentionally left open.
+        html += openListTag(type, marker) + liOpen;
+        stack.push({ indent: indent, type: type });
+      } else if (stack[stack.length - 1].type !== type) {
+        // Same depth, but the marker switched (e.g. - → 1.). Close the old
+        // list at this depth and start a fresh one.
+        html += "</li></" + stack.pop().type + ">";
+        html += openListTag(type, marker) + liOpen;
+        stack.push({ indent: indent, type: type });
+      } else {
+        // Sibling at the same depth, same marker type.
+        html += "</li>" + liOpen;
+      }
+
+      html += inline(content);
+    }
+
+    // Close anything still open.
+    while (stack.length > 0) {
+      html += "</li></" + stack.pop().type + ">";
+    }
+
+    return html;
+  }
+
+  function parseMarkdown(t) {
+    var lines = t.split("\n");
+    var out = [];
+    var i = 0;
+
+    while (i < lines.length) {
+      var line = lines[i];
+
+      // fenced code block
+      if (line.match(/^```/)) {
+        var content = [];
+        var end = i + 1;
+        while (end < lines.length && !lines[end].match(/^```/)) {
+          content.push(lines[end]);
+          end++;
+        }
+        out.push("<pre><code>" + escapeHtml(content.join("\n")) + "</code></pre>");
+        i = end + 1;
+        continue;
+      }
+
+      // horizontal rule
+      if (line.match(/^---+\s*$/)) {
+        out.push("<hr>");
+        i++;
+        continue;
+      }
+
+      // table
+      if (line.match(/^\|/) && lines[i+1] && lines[i+1].match(/^\|[-| :]+\|/)) {
+        var headers = splitRow(line).map(function(c) { return "<th>" + inline(c) + "</th>"; });
+        var rows = [];
+        var end = i + 2;
+        while (end < lines.length && lines[end].match(/^\|/)) {
+          var cells = splitRow(lines[end]).map(function(c) { return "<td>" + inline(c) + "</td>"; });
+          rows.push("<tr>" + cells.join("") + "</tr>");
+          end++;
+        }
+        out.push("<table><thead><tr>" + headers.join("") + "</tr></thead><tbody>" + rows.join("") + "</tbody></table>");
+        i = end;
+        continue;
+      }
+
+      // headings
+      var h = line.match(/^(#{1,6})\s+(.*)/);
+      if (h) {
+        out.push("<h" + h[1].length + ">" + inline(h[2]) + "</h" + h[1].length + ">");
+        i++;
+        continue;
+      }
+
+      // blockquote
+      if (line.match(/^>\s/)) {
+        var bq = [];
+        while (i < lines.length && lines[i].match(/^>\s?/)) {
+          bq.push(inline(lines[i].replace(/^>\s?/, "")));
+          i++;
+        }
+        out.push("<blockquote>" + bq.join("<br>") + "</blockquote>");
+        continue;
+      }
+
+      // list (ordered, unordered, nested, mixed)
+      if (line.match(/^\s*([-*]|\d+\.)\s/)) {
+        var listLines = [];
+        while (i < lines.length && lines[i].match(/^\s*([-*]|\d+\.)\s/)) {
+          listLines.push(lines[i]);
+          i++;
+        }
+        out.push(buildNestedList(listLines));
+        continue;
+      }
+
+      // blank line
+      if (line.trim() === "") {
+        i++;
+        continue;
+      }
+
+      // paragraph: fold consecutive non-blank, non-block lines into one <p>.
+      // A line starting with `|` is only a block (table) if the next line is
+      // a valid separator row; otherwise it's plain text that folds into the
+      // paragraph. Without this check, a malformed table would never advance
+      // `i` and the main loop would spin forever.
+      var para = [];
+      while (
+        i < lines.length &&
+        lines[i].trim() !== "" &&
+        !BLOCK_START.test(lines[i]) &&
+        !(lines[i].charAt(0) === "|" && lines[i+1] && lines[i+1].match(/^\|[-| :]+\|/))
+      ) {
+        para.push(inline(lines[i]));
+        i++;
+      }
+      if (para.length) {
+        out.push("<p>" + para.join(" ") + "</p>");
+      }
+    }
+    return out.join("");
+  }
+
+  var el = document.getElementById("summary-content");
+
+  // 1. Park <img> tags behind \u0000 sentinels so the strip pass doesn't eat them.
+  //    Same placeholder convention as inline code spans inside inline().
+  var imgs = [];
+  var raw = el.innerHTML.replace(/<img[^>]*>/gi, function(match) {
+    imgs.push(match);
+    return "\u0000I" + (imgs.length - 1) + "\u0000";
+  });
+
+  // 2. Undo Anki's HTML wrapping back into plain text + newlines.
+  raw = raw
+    // 2a. Normalize line breaks — AnkiDroid wraps lines in <div>, desktop uses <br>.
+    .replace(/<\/div>\s*<div[^>]*>/gi, "\n")
+    .replace(/<div[^>]*>/gi, "\n")
+    .replace(/<\/div>/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    // 2b. Strip any remaining HTML tags (images are already parked).
+    .replace(/<[^>]+>/g, "")
+    // 2c. Decode entities. `&amp;` MUST be last so `&amp;lt;` doesn't double-decode into `<`.
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&");
+
+  // 3. Run the markdown parser on plain text.
+  var parsed = parseMarkdown(raw);
+
+  // 4. Restore <img> tags exactly as the user wrote them; CSS handles styling.
+  parsed = parsed.replace(/\u0000I(\d+)\u0000/g, function(_, idx) {
+    return imgs[parseInt(idx, 10)];
+  });
+
+  el.innerHTML = parsed;
+})();
+</script>
