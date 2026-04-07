@@ -445,6 +445,15 @@ hr#answer {
   var tree = parseTree(rawText, title);
   layoutTree(tree);
   renderMindmap(tree, el);
+
+  // Center the hub horizontally in the scroll viewport on first paint.
+  var scroll = document.querySelector(".mindmap-scroll");
+  var hub = el.querySelector(".mindmap-hub");
+  if (scroll && hub) {
+    // hub.offsetLeft is its left edge inside the scroll container.
+    // Add half its width to get its center, then subtract half the viewport.
+    scroll.scrollLeft = hub.offsetLeft + hub.offsetWidth / 2 - scroll.clientWidth / 2;
+  }
 })();
 </script>
 
