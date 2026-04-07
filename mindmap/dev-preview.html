@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Mindmap dev preview</title>
+<style>
+/* === BASE CARD STYLING (will be copied to mindmap-note-type.md later) === */
+body {
+  font-family: Georgia, serif;
+  font-size: 16px;
+  line-height: 1.7;
+  padding: 24px;
+  max-width: 900px;
+  margin: 0 auto;
+  background-color: #ffffff;
+  color: #111111;
+}
+@media (prefers-color-scheme: dark) {
+  body { background-color: #1a1a1a; color: #e8e8e8; }
+}
+.subject {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #888;
+  text-align: center;
+  margin-bottom: 10px;
+}
+.back-header {
+  border-bottom: 1px solid #e8e8e8;
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+  text-align: center;
+}
+@media (prefers-color-scheme: dark) {
+  .back-header { border-bottom-color: #333; }
+}
+.keywords {
+  font-size: 12px;
+  color: #777;
+}
+hr#answer {
+  border: none;
+  border-top: 1px solid #ddd;
+  margin: 20px 0;
+}
+@media (prefers-color-scheme: dark) {
+  hr#answer { border-top-color: #333; }
+}
+
+/* === MINDMAP-SPECIFIC STYLES (built up across the plan) === */
+.mindmap-scroll {
+  overflow-x: auto;
+  padding: 8px 0;
+}
+.mindmap-canvas {
+  margin: 0 auto;
+  position: relative;
+}
+</style>
+</head>
+<body>
+
+<div class="back-header">
+  <div class="subject">DEV PREVIEW</div>
+  <div class="keywords">mindmap, sample</div>
+</div>
+
+<hr id="answer">
+
+<div class="mindmap-scroll">
+  <div class="mindmap" id="mindmap-root" data-title="Photosynthesis">
+- Light reactions
+  - Photolysis
+  - Photophosphorylation
+- Calvin cycle
+  - Carbon fixation
+  - Reduction
+  - Regeneration
+- Regulation
+  - Stomatal control
+  - Enzyme activation
+  </div>
+</div>
+
+<script>
+(function() {
+  // Implementation will be built up across the plan tasks.
+  // For Task 1 we just verify the page loads.
+  console.log("dev-preview.html loaded; mindmap-root present:",
+              !!document.getElementById("mindmap-root"));
+})();
+</script>
+
+</body>
+</html>
