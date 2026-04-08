@@ -66,46 +66,17 @@
     return root;
   }
 
-  // ===== Phase 3: Layout (single-pass, no DOM measurement) =====
-  // Sizes are estimated via canvas.measureText() — pure JS, no reflow.
-  // The max-width CSS cap bounds estimation error so nodes never overlap.
+  // ===== Phase 3: Layout =====
   var COLOR_SLOTS = 8;
   var COL_GAP = 24;
   var LEAF_GAP_PX = 10;
-  var MIN_LEAF_SLOT_PX = 34;
+  var MIN_LEAF_SLOT_PX = 32;
   var CANVAS_PAD = 16;
-
-  // Size estimation constants (must match CSS).
-  var MAX_W = 200;
-  var NODE_PAD_X = 20;    // 10px padding × 2
-  var HUB_PAD_X = 28;     // 14px padding × 2
-  var NODE_LINE_H = 17.5;  // 14px × 1.25 line-height
-  var HUB_LINE_H = 21.25;  // 17px × 1.25 line-height
-  var NODE_EXTRA_H = 10;   // 4+4 padding + 2 border
-  var HUB_EXTRA_H = 14;    // 6+6 padding + 2 border
-  var _ctx = document.createElement("canvas").getContext("2d");
-
-  function estimateSize(node, isRoot) {
-    var padX = isRoot ? HUB_PAD_X : NODE_PAD_X;
-    var lineH = isRoot ? HUB_LINE_H : NODE_LINE_H;
-    var extraH = isRoot ? HUB_EXTRA_H : NODE_EXTRA_H;
-    _ctx.font = isRoot ? "bold 17px Georgia, serif" : "14px Georgia, serif";
-    var textW = _ctx.measureText(node.label).width;
-    var innerMax = MAX_W - padX;
-    if (textW <= innerMax) {
-      node.width = textW + padX;
-      node.height = lineH + extraH;
-    } else {
-      node.width = MAX_W;
-      node.height = Math.ceil(textW / innerMax) * lineH + extraH;
-    }
-  }
 
   function propagateBranch(node, branchIndex) {
     node.branchIndex = branchIndex;
-    for (var i = 0; i < node.children.length; i++) {
+    for (var i = 0; i < node.children.length; i++)
       propagateBranch(node.children[i], branchIndex);
-    }
   }
 
   function walkAll(node, cb) {
@@ -115,12 +86,10 @@
 
   function assignBranches(root) {
     root.branchIndex = -1;
-    for (var i = 0; i < root.children.length; i++) {
+    for (var i = 0; i < root.children.length; i++)
       propagateBranch(root.children[i], i % COLOR_SLOTS);
-    }
   }
 
-  // Adaptive x from widest node per depth column.
   function assignX(root) {
     var maxW = {};
     var maxDepth = 0;
@@ -178,25 +147,57 @@
     root.canvasHeight = (maxY - minY) + CANVAS_PAD * 2;
   }
 
-  // ===== Phase 4: Render (single DOM insertion) =====
+  // ===== Phase 4: Render =====
+  // DOM measurement for accurate sizes, but optimized:
+  // - DocumentFragment for batch insertion (one layout, not N)
+  // - No visibility toggling (synchronous JS blocks painting,
+  //   so the browser only paints the final state)
+  // - Batch position writes after measurement
   var SVG_NS = "http://www.w3.org/2000/svg";
 
   function renderMindmap(root, container) {
-    // All layout computed in pure JS — no DOM reads needed.
     assignBranches(root);
-    walkAll(root, function(n) { estimateSize(n, n === root); });
+
+    // Clear container and set up canvas.
+    while (container.firstChild) container.removeChild(container.firstChild);
+    var canvas = document.createElement("div");
+    canvas.className = "mindmap-canvas";
+    canvas.style.position = "relative";
+    container.appendChild(canvas);
+
+    // Build all node divs in a DocumentFragment (no reflow yet).
+    var frag = document.createDocumentFragment();
+    walkAll(root, function(n) {
+      var div = document.createElement("div");
+      div.className = "mindmap-node" + (n === root ? " mindmap-hub" : "");
+      if (n !== root) div.setAttribute("data-branch", String(n.branchIndex % COLOR_SLOTS));
+      div.style.left = "0px";
+      div.style.top = "0px";
+      div.insertAdjacentHTML("afterbegin", inline(n.label));
+      frag.appendChild(div);
+      n._div = div;
+    });
+    // Single batch insertion — triggers one layout calculation.
+    canvas.appendChild(frag);
+
+    // Read actual rendered sizes (layout already computed, no extra reflow).
+    walkAll(root, function(n) {
+      n.width = n._div.offsetWidth;
+      n.height = n._div.offsetHeight;
+    });
+
+    // Compute final positions (pure JS, no DOM access).
     assignX(root);
     assignY(root);
     computeBounds(root);
 
-    // Build everything in a DocumentFragment — one DOM insertion.
-    var canvas = document.createElement("div");
-    canvas.className = "mindmap-canvas";
-    canvas.style.position = "relative";
-    canvas.style.width = root.canvasWidth + "px";
-    canvas.style.height = root.canvasHeight + "px";
+    // Batch-write final positions (no reflow until browser paints).
+    walkAll(root, function(n) {
+      n._div.style.left = n.x + "px";
+      n._div.style.top = n.y + "px";
+    });
 
-    // SVG connectors (built first so they render behind nodes).
+    // Build SVG connectors.
     var svg = document.createElementNS(SVG_NS, "svg");
     svg.setAttribute("class", "mindmap-edges");
     svg.setAttribute("width", root.canvasWidth);
@@ -229,22 +230,12 @@
       }
     }
     walkConnectors(root);
-    canvas.appendChild(svg);
 
-    // Node divs at their final positions.
-    walkAll(root, function(n) {
-      var div = document.createElement("div");
-      div.className = "mindmap-node" + (n === root ? " mindmap-hub" : "");
-      if (n !== root) div.setAttribute("data-branch", String(n.branchIndex % COLOR_SLOTS));
-      div.style.left = n.x + "px";
-      div.style.top = n.y + "px";
-      div.insertAdjacentHTML("afterbegin", inline(n.label));
-      canvas.appendChild(div);
-    });
-
-    // Single DOM insertion — one reflow.
-    while (container.firstChild) container.removeChild(container.firstChild);
-    container.appendChild(canvas);
+    // Insert SVG behind nodes, finalize canvas size.
+    canvas.insertBefore(svg, canvas.firstChild);
+    canvas.style.width = root.canvasWidth + "px";
+    canvas.style.height = root.canvasHeight + "px";
+    // Browser paints the final state here (after JS yields).
   }
 
   // ===== Main =====
