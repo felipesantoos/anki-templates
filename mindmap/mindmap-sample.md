@@ -17,7 +17,7 @@ Copy everything between `=== BEGIN ===` and `=== END ===` into the Mindmap field
 === BEGIN ===
 - Two-branch case
   - Verifies the smallest non-trivial split
-  - Should fan one branch right, one left
+  - Both children should appear to the right
 - Five-branch alternation
   - First child
   - Second child
@@ -61,13 +61,13 @@ Copy everything between `=== BEGIN ===` and `=== END ===` into the Mindmap field
 
 If every bullet below renders correctly, the parser, layout pass, and renderer are healthy:
 
-1. The hub at the center reads `Mindmap Feature Showcase` (the Title field), not `(untitled)`.
-2. There are exactly **10** top-level branches arranged around the hub, alternating left and right.
+1. The root node on the far left reads `Mindmap Feature Showcase` (the Title field), not `(untitled)`.
+2. There are exactly **10** top-level branches flowing to the right of the root.
 3. The first 8 top-level branches each have a **distinct color** (blue, green, orange, purple, red, teal, magenta, amber-brown).
 4. Branches 9 and 10 (`Color cycling — branch 9` and `branch 10`) reuse the colors of branches 1 and 2 (blue and green).
-5. The "Two-branch case" branch shows two children arranged vertically below it.
-6. The "Five-branch alternation" branch shows five children stacked vertically.
-7. The "Three levels deep" branch reaches **three** distinct visual indents — root → branch → grandchild.
+5. The "Two-branch case" branch shows two children to its right, stacked vertically.
+6. The "Five-branch alternation" branch shows five children stacked vertically to its right.
+7. The "Three levels deep" branch reaches **three** distinct columns — root → branch → sub-branch → leaf.
 8. The "Long-label branch with a deliberately verbose title" wraps gracefully and its connector still meets the node correctly.
 9. The "Inline formatting" branch's children render with their formatting applied:
    - `**Bold** leaf` shows the word "Bold" in heavier weight.
@@ -76,11 +76,11 @@ If every bullet below renders correctly, the parser, layout pass, and renderer a
    - `[Link leaf]` is underlined and clickable; clicking opens the system browser.
    - `~~Struck~~` shows the word "Struck" with a strike-through line.
    - `***Bold italic***` is both bold and italic.
-10. The "Single-leaf branch" has no visible children (it's a leaf itself, despite the alternation rule still placing it on the correct side).
+10. The "Single-leaf branch" has no visible children (it's a leaf itself).
 11. The "Mixed marker branch" treats `*` and `-` markers identically — both children appear normally, no marker visible in the rendered text.
-12. Connectors between parent and child are smooth curved lines (quadratic Bezier), not straight diagonals or right-angle elbows.
+12. Connectors between parent and child are smooth curved lines (cubic Bezier S-curves), not straight diagonals or right-angle elbows.
 13. Each connector matches the **destination** branch's color (a connector entering an orange branch is orange).
-14. The hub is horizontally centered in the visible scroll area on first paint, even though the canvas overflows.
+14. The entire tree is visible in the scroll area; horizontal scrolling works if the tree is wider than the viewport.
 15. Dark mode (system setting) inverts the card background and the 8 branch colors stay readable on the dark background.
 16. No raw markdown syntax (`*`, `**`, `` ` ``, `[`) is visible anywhere in the rendered card — every inline mark has been converted.
 17. No empty bullets or stray dashes appear in the diagram.

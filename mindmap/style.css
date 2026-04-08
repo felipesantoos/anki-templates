@@ -106,7 +106,7 @@ hr#answer {
 
 .mindmap-node {
   position: absolute;
-  transform: translate(-50%, -50%);
+  transform: translateY(-50%);
   font-family: Georgia, serif;
   font-size: 14px;
   padding: 4px 10px;
@@ -115,13 +115,13 @@ hr#answer {
   max-width: 200px;
   white-space: normal;
   word-wrap: break-word;
-  text-align: center;
+  text-align: left;
   line-height: 1.25;
   box-sizing: border-box;
 }
 
 .mindmap-hub {
-  font-size: 18px;
+  font-size: 17px;
   font-weight: bold;
   color: inherit;
   border-bottom: 2px solid currentColor;

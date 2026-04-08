@@ -1,6 +1,6 @@
 # Mindmap Note Type
 
-A drop-in Anki note type that converts a markdown nested-bullet list into a balanced horizontal mindmap diagram (root in the center, branches fanning left and right).
+A drop-in Anki note type that converts a markdown nested-bullet list into a horizontal tree diagram (root on the left, branches flowing right).
 
 Sibling of the **Summary** note type — same field shape, same typography, same Anki HTML cleanup pipeline. A note can be converted between the two by changing only the note type.
 
@@ -21,7 +21,7 @@ Sibling of the **Summary** note type — same field shape, same typography, same
 
 - Block-level markdown inside a label (paragraphs, fenced code, headings, lists nested inside a label, images, tables, blockquotes). Node labels are single-line by design.
 - Collapse/expand interactivity. Cards are fully expanded on flip.
-- True polar / sunburst layouts. Branches grow horizontally outward from the hub.
+- Radial or polar layouts. The tree grows strictly left-to-right.
 
 ---
 
