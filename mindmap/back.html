@@ -12,8 +12,6 @@
 <script>
 (function() {
   // ===== Phase 1: Cleanup =====
-  // Anki wraps lines in <div> (desktop/AnkiDroid) or <br> (older clients)
-  // and entity-encodes special chars. Undo all of that to recover plain text.
   function cleanupAnkiHtml(rawHtml) {
     return rawHtml
       .replace(/<\/div>\s*<div[^>]*>/gi, "\n")
@@ -21,7 +19,6 @@
       .replace(/<\/div>/gi, "")
       .replace(/<br\s*\/?>/gi, "\n")
       .replace(/<[^>]+>/g, "")
-      // Decode entities. &amp; MUST be last so &amp;lt; doesn't double-decode.
       .replace(/&lt;/g, "<")
       .replace(/&gt;/g, ">")
       .replace(/&nbsp;/g, " ")
@@ -29,8 +26,6 @@
   }
 
   // ===== Phase 1b: Inline formatter =====
-  // Bold/italic/code/links/strikethrough. Code spans are parked behind
-  // sentinels so link/emphasis rules can't reach inside them.
   function inline(t) {
     t = t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     var codes = [];
@@ -51,7 +46,6 @@
   }
 
   // ===== Phase 2: Parse =====
-  // Indented bullets → tree of { label, children, depth }.
   function parseTree(text, rootLabel) {
     var root = { label: rootLabel, children: [], depth: 0 };
     var stack = [{ indent: -1, node: root }];
@@ -72,15 +66,40 @@
     return root;
   }
 
-  // ===== Phase 3: Layout (horizontal tree, two-pass measurement) =====
-  // Pass 1 assigns branch colors. After DOM measurement gives real widths
-  // and heights, Pass 2 computes adaptive x columns from the widest node
-  // at each depth, and Pass 3 stacks nodes vertically using real heights.
+  // ===== Phase 3: Layout (single-pass, no DOM measurement) =====
+  // Sizes are estimated via canvas.measureText() — pure JS, no reflow.
+  // The max-width CSS cap bounds estimation error so nodes never overlap.
   var COLOR_SLOTS = 8;
-  var COL_GAP = 24;          // horizontal gap between columns
-  var LEAF_GAP_PX = 10;      // vertical gap between adjacent leaf slots
-  var MIN_LEAF_SLOT_PX = 32; // floor for a leaf's vertical slot height
+  var COL_GAP = 24;
+  var LEAF_GAP_PX = 10;
+  var MIN_LEAF_SLOT_PX = 34;
   var CANVAS_PAD = 16;
+
+  // Size estimation constants (must match CSS).
+  var MAX_W = 200;
+  var NODE_PAD_X = 20;    // 10px padding × 2
+  var HUB_PAD_X = 28;     // 14px padding × 2
+  var NODE_LINE_H = 17.5;  // 14px × 1.25 line-height
+  var HUB_LINE_H = 21.25;  // 17px × 1.25 line-height
+  var NODE_EXTRA_H = 10;   // 4+4 padding + 2 border
+  var HUB_EXTRA_H = 14;    // 6+6 padding + 2 border
+  var _ctx = document.createElement("canvas").getContext("2d");
+
+  function estimateSize(node, isRoot) {
+    var padX = isRoot ? HUB_PAD_X : NODE_PAD_X;
+    var lineH = isRoot ? HUB_LINE_H : NODE_LINE_H;
+    var extraH = isRoot ? HUB_EXTRA_H : NODE_EXTRA_H;
+    _ctx.font = isRoot ? "bold 17px Georgia, serif" : "14px Georgia, serif";
+    var textW = _ctx.measureText(node.label).width;
+    var innerMax = MAX_W - padX;
+    if (textW <= innerMax) {
+      node.width = textW + padX;
+      node.height = lineH + extraH;
+    } else {
+      node.width = MAX_W;
+      node.height = Math.ceil(textW / innerMax) * lineH + extraH;
+    }
+  }
 
   function propagateBranch(node, branchIndex) {
     node.branchIndex = branchIndex;
@@ -94,7 +113,6 @@
     for (var i = 0; i < node.children.length; i++) walkAll(node.children[i], cb);
   }
 
-  // Pass 1 — assign branch color families.
   function assignBranches(root) {
     root.branchIndex = -1;
     for (var i = 0; i < root.children.length; i++) {
@@ -102,7 +120,7 @@
     }
   }
 
-  // Pass 2 (post-measurement) — adaptive x from widest node per depth.
+  // Adaptive x from widest node per depth column.
   function assignX(root) {
     var maxW = {};
     var maxDepth = 0;
@@ -119,7 +137,6 @@
     walkAll(root, function(n) { n.x = colX[n.depth]; });
   }
 
-  // Pass 3 — vertical positions from measured heights.
   function assignY(root) {
     function computeSlot(node) {
       if (node.children.length === 0) {
@@ -145,8 +162,6 @@
     placeY(root, 0);
   }
 
-  // Bounding box + translate so top-left is at (CANVAS_PAD, CANVAS_PAD).
-  // Nodes are left-aligned: left edge = n.x, right edge = n.x + n.width.
   function computeBounds(root) {
     var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     walkAll(root, function(n) {
@@ -163,56 +178,25 @@
     root.canvasHeight = (maxY - minY) + CANVAS_PAD * 2;
   }
 
-  // ===== Phase 4: Render =====
-  function clearContainer(el) {
-    while (el.firstChild) el.removeChild(el.firstChild);
-  }
-
+  // ===== Phase 4: Render (single DOM insertion) =====
   var SVG_NS = "http://www.w3.org/2000/svg";
 
   function renderMindmap(root, container) {
+    // All layout computed in pure JS — no DOM reads needed.
     assignBranches(root);
-
-    // Initial y=0 for hidden render; real y comes after measurement.
-    walkAll(root, function(n) { n.x = 0; n.y = 0; });
-
-    clearContainer(container);
-    var canvas = document.createElement("div");
-    canvas.className = "mindmap-canvas";
-    canvas.style.position = "relative";
-    canvas.style.visibility = "hidden";
-    container.appendChild(canvas);
-
-    // Insert all nodes for DOM measurement.
-    walkAll(root, function(n) {
-      var div = document.createElement("div");
-      div.className = "mindmap-node" + (n === root ? " mindmap-hub" : "");
-      if (n !== root) div.setAttribute("data-branch", String(n.branchIndex % COLOR_SLOTS));
-      div.style.left = "0px";
-      div.style.top = "0px";
-      div.insertAdjacentHTML("afterbegin", inline(n.label));
-      canvas.appendChild(div);
-      n._div = div;
-    });
-
-    // Measure actual rendered sizes.
-    walkAll(root, function(n) {
-      n.width = n._div.offsetWidth;
-      n.height = n._div.offsetHeight;
-    });
-
-    // Compute final positions.
+    walkAll(root, function(n) { estimateSize(n, n === root); });
     assignX(root);
     assignY(root);
     computeBounds(root);
 
-    // Apply final positions.
-    walkAll(root, function(n) {
-      n._div.style.left = n.x + "px";
-      n._div.style.top = n.y + "px";
-    });
+    // Build everything in a DocumentFragment — one DOM insertion.
+    var canvas = document.createElement("div");
+    canvas.className = "mindmap-canvas";
+    canvas.style.position = "relative";
+    canvas.style.width = root.canvasWidth + "px";
+    canvas.style.height = root.canvasHeight + "px";
 
-    // SVG connectors — left-to-right cubic Bezier.
+    // SVG connectors (built first so they render behind nodes).
     var svg = document.createElementNS(SVG_NS, "svg");
     svg.setAttribute("class", "mindmap-edges");
     svg.setAttribute("width", root.canvasWidth);
@@ -223,22 +207,21 @@
     svg.style.pointerEvents = "none";
 
     function emitConnector(parent, child) {
-      var sx = parent.x + parent.width;  // parent right edge
+      var sx = parent.x + parent.width;
       var sy = parent.y;
-      var ex = child.x;                  // child left edge
+      var ex = child.x;
       var ey = child.y;
-      var mx = (sx + ex) / 2;            // horizontal midpoint
-      var d = "M " + sx + " " + sy +
-              " C " + mx + " " + sy + ", " + mx + " " + ey + ", " + ex + " " + ey;
+      var mx = (sx + ex) / 2;
       var path = document.createElementNS(SVG_NS, "path");
-      path.setAttribute("d", d);
+      path.setAttribute("d",
+        "M " + sx + " " + sy +
+        " C " + mx + " " + sy + ", " + mx + " " + ey + ", " + ex + " " + ey);
       path.setAttribute("stroke", "var(--branch-" + (child.branchIndex % COLOR_SLOTS) + ")");
       path.setAttribute("stroke-width", "2");
       path.setAttribute("stroke-linecap", "round");
       path.setAttribute("fill", "none");
       svg.appendChild(path);
     }
-
     function walkConnectors(node) {
       for (var i = 0; i < node.children.length; i++) {
         emitConnector(node, node.children[i]);
@@ -246,11 +229,22 @@
       }
     }
     walkConnectors(root);
+    canvas.appendChild(svg);
 
-    canvas.insertBefore(svg, canvas.firstChild);
-    canvas.style.width = root.canvasWidth + "px";
-    canvas.style.height = root.canvasHeight + "px";
-    canvas.style.visibility = "visible";
+    // Node divs at their final positions.
+    walkAll(root, function(n) {
+      var div = document.createElement("div");
+      div.className = "mindmap-node" + (n === root ? " mindmap-hub" : "");
+      if (n !== root) div.setAttribute("data-branch", String(n.branchIndex % COLOR_SLOTS));
+      div.style.left = n.x + "px";
+      div.style.top = n.y + "px";
+      div.insertAdjacentHTML("afterbegin", inline(n.label));
+      canvas.appendChild(div);
+    });
+
+    // Single DOM insertion — one reflow.
+    while (container.firstChild) container.removeChild(container.firstChild);
+    container.appendChild(canvas);
   }
 
   // ===== Main =====
