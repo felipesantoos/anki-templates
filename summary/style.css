@@ -7,6 +7,11 @@
   margin: 0 auto;
   background-color: #ffffff;
   color: #111111;
+  /* AnkiDroid and AnkiMobile inherit `text-align: center` from their
+     WebView shell; desktop Anki does not. Set left explicitly so back
+     content (`.back-header`, `.summary`) renders the same on both.
+     `.subject` and `.title` re-override to center for the front. */
+  text-align: left;
 }
 
 @media (prefers-color-scheme: dark) {
